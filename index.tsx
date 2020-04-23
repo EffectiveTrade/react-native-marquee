@@ -75,14 +75,16 @@ export default class MarqueeText extends PureComponent<IMarqueeTextProps, IMarqu
   }
 
   componentDidMount(): void {
-    const { marqueeDelay } = this.props;
     if (this.props.marqueeOnStart) {
-      this.startAnimation(marqueeDelay!);
+      this.startAnimation();
     }
   }
 
   componentDidUpdate(props: IMarqueeTextProps, state: IMarqueeTextState): void {
-    if (this.props.children !== props.children) {
+    // Для строк фиксированной длины (например число с фиксированной точностью) можно не сбрасывать измерения и анимацию.
+    // Изменения произойдут прямо в двигающейся строке и не нарушат верстку контейнера
+    if ((typeof this.props.children !== 'string' && this.props.children !== props.children) ||
+      (typeof this.props.children === 'string' && this.props.children.length !== props.children.length)) {
       this.invalidateMetrics();
       this.resetAnimation();
     }
@@ -95,12 +97,12 @@ export default class MarqueeText extends PureComponent<IMarqueeTextProps, IMarqu
     this.clearTimeout();
   }
 
-  startAnimation(timeDelay: number): void {
+  startAnimation(): void {
     if (this.state.animating) {
       return;
     }
 
-    this.start(timeDelay);
+    this.start(this.props.marqueeDelay!);
   }
 
   stopAnimation(): void {
@@ -108,17 +110,20 @@ export default class MarqueeText extends PureComponent<IMarqueeTextProps, IMarqu
   }
 
   /**
-   * Resets the marquee and restarts it after `marqueeDelay` millisecons.
+   * Resets the marquee and restarts it after `marqueeDelay` milliseconds.
+   * @marqueeResetDelay: метод resetAnimation вызывается в двух случаях:
+   *  1) после завершения анимации; 2) после обновления пропсов;
+   *  Этот параметр добавлен для того, чтобы в первом случае после marqueeResetDelay мс сбросить анимацию на начало,
+   *  а потом после marqueeDelay мс запустить ее снова.
+   *  Во втором случае нужно сразу же сбрсить анимацию на начало и после marqueeDelay мс запустить ее снова.
    */
-  resetAnimation() {
-    const { marqueeDelay, marqueeResetDelay } = this.props;
-    const delay = Math.max(100, marqueeResetDelay!);
+  resetAnimation(marqueeResetDelay: number = 100) {
     this.setTimeout(() => {
       this.animatedValue.setValue(0);
       this.setState({ animating: false }, () => {
-        this.startAnimation(marqueeDelay!);
+        this.startAnimation();
       });
-    }, delay);
+    }, marqueeResetDelay);
   }
 
   start(timeDelay: number) {
@@ -127,25 +132,27 @@ export default class MarqueeText extends PureComponent<IMarqueeTextProps, IMarqu
     const callback = () => {
       this.setState({ animating: true });
 
-      this.setTimeout(() => {
-        this.calculateMetrics();
+      this.setTimeout(async () => {
+        await this.calculateMetrics();
 
         if (!this.contentFits) {
-          Animated.timing(this.animatedValue, {
-            toValue: -this.distance!,
-            duration,
-            easing,
-            useNativeDriver,
-          }).start(({ finished }: any) => {
-            if (finished) {
-              if (loop) {
-                this.resetAnimation();
-              } else {
-                this.stop();
-                onMarqueeComplete!();
+          requestAnimationFrame(() => {
+            Animated.timing(this.animatedValue, {
+              toValue: -this.distance!,
+              duration,
+              easing,
+              useNativeDriver,
+            }).start(({ finished }: any) => {
+              if (finished) {
+                if (loop) {
+                  this.resetAnimation(Math.max(100, this.props.marqueeResetDelay || 0));
+                } else {
+                  this.stop();
+                  onMarqueeComplete!();
+                }
               }
-            }
-          });
+            });
+          })
         }
       }, 100);
     };
@@ -214,12 +221,12 @@ export default class MarqueeText extends PureComponent<IMarqueeTextProps, IMarqu
 
   render(): ReactNode {
     const { children, style, ...rest } = this.props;
-    const { animating } = this.state;
     const { width, height } = StyleSheet.flatten(style);
 
     return (
       <View style={[styles.container, { width, height }]}>
-        <Text numberOfLines={1} {...rest} style={[style, { opacity: animating ? 0 : 1 }]}>
+        {/*Блок невидимый, служить для вычисления размера контейнера*/}
+        <Text numberOfLines={1} {...rest} style={[style, { opacity: 0 }]}>
           {children}
         </Text>
         <ScrollView
