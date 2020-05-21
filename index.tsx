@@ -84,7 +84,7 @@ export default class MarqueeText extends PureComponent<IMarqueeTextProps, IMarqu
     // Для строк фиксированной длины (например число с фиксированной точностью) можно не сбрасывать измерения и анимацию.
     // Изменения произойдут прямо в двигающейся строке и не нарушат верстку контейнера
     if ((typeof this.props.children !== 'string' && this.props.children !== props.children) ||
-      (typeof this.props.children === 'string' && this.props.children.length !== props.children.length)) {
+      (typeof this.props.children === 'string' && this.props.children.length !== props.children?.length)) {
       this.invalidateMetrics();
       this.resetAnimation();
     }
