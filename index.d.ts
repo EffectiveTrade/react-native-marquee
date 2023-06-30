@@ -43,6 +43,7 @@ declare module 'react-native-marquee' {
      * Set this truen if you want to use native driver
      */
     useNativeDriver?: boolean;
+    inline?: boolean;
   }
 
 

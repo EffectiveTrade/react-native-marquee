@@ -11,6 +11,8 @@ import {
   TextProps,
   TextStyle,
   View,
+  NativeSyntheticEvent,
+  TextLayoutEventData,
 } from 'react-native';
 
 export interface IMarqueeTextProps extends TextProps {
@@ -24,6 +26,7 @@ export interface IMarqueeTextProps extends TextProps {
   onMarqueeComplete?: () => void;
   children: string;
   useNativeDriver?: boolean;
+  inline?: boolean;
 }
 
 export interface IMarqueeTextState {
@@ -57,12 +60,13 @@ export default class MarqueeText extends PureComponent<IMarqueeTextProps, IMarqu
   private timer: number;
   private containerWidth: number = 0;
   private textWidth: number = 0;
+  private widthFull?: number;
 
   constructor(props: IMarqueeTextProps) {
     super(props);
 
     this.animatedValue = new Animated.Value(0);
-    this.contentFits = false;
+    this.contentFits = true;
     this.distance = null;
     this.timer = 0;
 
@@ -162,14 +166,19 @@ export default class MarqueeText extends PureComponent<IMarqueeTextProps, IMarqu
 
   calculateMetrics = () => {
     this.distance = this.textWidth - this.containerWidth;
-    this.contentFits = !MarqueeText.shouldAnimate(this.distance);
+    const contentFits = !MarqueeText.shouldAnimate(this.distance);
+    if (contentFits !== this.contentFits) {
+      this.contentFits = contentFits;
+      this.forceUpdate();
+    }
   };
 
   invalidateMetrics() {
     // Null distance is the special value to allow recalculation
     this.distance = null;
     // Assume the marquee does not fit until calculations show otherwise
-    this.contentFits = false;
+    this.contentFits = true;
+    this.widthFull = undefined;
   }
 
   /**
@@ -202,13 +211,13 @@ export default class MarqueeText extends PureComponent<IMarqueeTextProps, IMarqu
   };
 
   render(): ReactNode {
-    const { children, style, ...rest } = this.props;
+    const { children, style, inline, ...rest } = this.props;
     const { width, height } = StyleSheet.flatten(style);
 
     return (
-      <View style={[styles.container, { width, height }]}>
+      <View style={[styles.container, { width, height, flex: !this.contentFits && inline ? 1 : undefined }]}>
         {/*Блок невидимый, служит для вычисления размера контейнера*/}
-        <Text numberOfLines={1} {...rest} style={[style, { opacity: 0 }]}>
+        <Text numberOfLines={1} onTextLayout={this.onBaseTextLayout} {...rest} style={[style, { opacity: 0, width: this.widthFull, maxWidth: '100%' }]}>
           {children}
         </Text>
         <ScrollView
@@ -231,10 +240,18 @@ export default class MarqueeText extends PureComponent<IMarqueeTextProps, IMarqu
       </View>
     );
   }
+
+  onBaseTextLayout = (e: NativeSyntheticEvent<TextLayoutEventData>) => {
+    if (!this.widthFull) {
+      this.widthFull = Math.floor(e.nativeEvent.lines.reduce((acc, i) => acc + i.width, 0));
+      this.forceUpdate();
+    }
+  }
 }
 
 const styles = StyleSheet.create({
   container: {
     overflow: 'hidden',
+    flexDirection: 'row',
   },
 });
