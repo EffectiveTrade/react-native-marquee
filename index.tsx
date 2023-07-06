@@ -11,8 +11,6 @@ import {
   TextProps,
   TextStyle,
   View,
-  NativeSyntheticEvent,
-  TextLayoutEventData,
 } from 'react-native';
 
 export interface IMarqueeTextProps extends TextProps {
@@ -60,7 +58,14 @@ export default class MarqueeText extends PureComponent<IMarqueeTextProps, IMarqu
   private timer: number;
   private containerWidth: number = 0;
   private textWidth: number = 0;
-  private widthFull?: number;
+
+  // если строка с пробелом - то подсчет размера ведется неправильно. избавляемся от пробелов
+  get children() {
+    const children = this.props.children;
+    return typeof children === 'string' ? children.replace(/\s/g, '\u00A0')
+      : Array.isArray(children) && (children as any[]).every(c => typeof c === 'string') ? (children as string[]).join('').replace(/\s/g, '\u00A0')
+        : children;
+  }
 
   constructor(props: IMarqueeTextProps) {
     super(props);
@@ -178,7 +183,6 @@ export default class MarqueeText extends PureComponent<IMarqueeTextProps, IMarqu
     this.distance = null;
     // Assume the marquee does not fit until calculations show otherwise
     this.contentFits = true;
-    this.widthFull = undefined;
   }
 
   /**
@@ -217,8 +221,8 @@ export default class MarqueeText extends PureComponent<IMarqueeTextProps, IMarqu
     return (
       <View style={[styles.container, { width, height, flex: !this.contentFits && inline ? 1 : undefined }]}>
         {/*Блок невидимый, служит для вычисления размера контейнера*/}
-        <Text numberOfLines={1} onTextLayout={this.onBaseTextLayout} {...rest} style={[style, { opacity: 0, width: this.widthFull, maxWidth: '100%' }]}>
-          {children}
+        <Text numberOfLines={1} {...rest} style={[style, { opacity: 0 }]}>
+          {this.children}
         </Text>
         <ScrollView
           style={StyleSheet.absoluteFillObject}
@@ -239,13 +243,6 @@ export default class MarqueeText extends PureComponent<IMarqueeTextProps, IMarqu
         </ScrollView>
       </View>
     );
-  }
-
-  onBaseTextLayout = (e: NativeSyntheticEvent<TextLayoutEventData>) => {
-    if (!this.widthFull) {
-      this.widthFull = Math.floor(e.nativeEvent.lines.reduce((acc, i) => acc + i.width, 0));
-      this.forceUpdate();
-    }
   }
 }
 
